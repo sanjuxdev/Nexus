@@ -21,9 +21,9 @@ export default defineConfig({
       },
     } as any),
   manifest: {
-    name: 'SIH26171 Browser Agent',
+    name: 'Nexus',
     version: '1.0.0',
-    description: 'On-device visual perception for light-weight browser agents (ISRO, PS 26171)',
+    description: 'On-device visual perception for light-weight browser agents',
     permissions: [
       'scripting',
       'storage',
