@@ -3,7 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "types": [
-      "chrome"
+      "chrome",
+      "node"
     ],
     "paths": {
       "@contracts/*": [
