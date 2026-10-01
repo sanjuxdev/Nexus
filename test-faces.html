@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>YuNet Real Runtime Face Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #111; color: white; padding: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+    .card { background: #222; padding: 10px; border-radius: 8px; }
+    canvas { max-width: 100%; border: 1px solid #444; }
+    pre { font-size: 11px; color: #aaa; white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body>
+  <h2>YuNet Diagnostic Test</h2>
+  <div id="loading">Loading ONNX...</div>
+  <div class="grid" id="grid"></div>
+
+<script>
+const CONFIG = {
+  scoreThreshold: 0.6,
+  nmsThreshold: 0.3
+};
+
+// Use same anchor-free decoding as the repaired extension
+function decodeYuNet(tensors, metadata) {
+  let candidates = [];
+  const strides = [8, 16, 32];
+  
+  for (const stride of strides) {
+    const clsTensor = tensors[`cls_${stride}`];
+    const objTensor = tensors[`obj_${stride}`];
+    const bboxTensor = tensors[`bbox_${stride}`];
+    if (!clsTensor) continue;
+    
+    const clsData = clsTensor.data;
+    const objData = objTensor.data;
+    const bboxData = bboxTensor.data;
+    
+    const cols = Math.floor(metadata.paddedWidth / stride);
+    const rows = Math.floor(metadata.paddedHeight / stride);
+    
+    console.log(`[YuNet Postprocess] stride=${stride} dims=`, clsTensor.dims);
+    
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < cols; column++) {
+        const idx = row * cols + column;
+        
+        // sqrt(cls * obj)
+        const cls = Math.max(0, Math.min(1, clsData[idx]));
+        const obj = Math.max(0, Math.min(1, objData[idx]));
+        const score = Math.sqrt(cls * obj);
+        
+        if (score >= CONFIG.scoreThreshold) {
+          const cx = (column + bboxData[idx * 4 + 0]) * stride;
+          const cy = (row + bboxData[idx * 4 + 1]) * stride;
+          const w = Math.exp(bboxData[idx * 4 + 2]) * stride;
+          const h = Math.exp(bboxData[idx * 4 + 3]) * stride;
+          
+          const x = cx - w / 2;
+          const y = cy - h / 2;
+          candidates.push({ box: [x, y, w, h], score });
+        }
+      }
+    }
+  }
+  
+  console.log(`[YuNet Postprocess] Raw Candidates: ${candidates.length}`);
+  candidates.sort((a, b) => b.score - a.score);
+  const kept = [];
+  const active = new Array(candidates.length).fill(true);
+  
+  for (let i = 0; i < candidates.length; i++) {
+    if (!active[i]) continue;
+    const cand = candidates[i];
+    
+    const bx = (cand.box[0] - metadata.offsetX) / metadata.scale;
+    const by = (cand.box[1] - metadata.offsetY) / metadata.scale;
+    const bw = cand.box[2] / metadata.scale;
+    const bh = cand.box[3] / metadata.scale;
+    
+    kept.push({ box: [bx, by, bw, bh], score: cand.score });
+    
+    for (let j = i + 1; j < candidates.length; j++) {
+      if (!active[j]) continue;
+      const inter = computeIoU(cand.box, candidates[j].box);
+      if (inter > CONFIG.nmsThreshold) {
+        active[j] = false;
+      }
+    }
+  }
+  
+  console.log(`[YuNet Postprocess] Post-NMS Candidates: ${kept.length}`);
+  return kept;
+}
+
+function computeIoU(box1, box2) {
+  const x1 = Math.max(box1[0], box2[0]);
+  const y1 = Math.max(box1[1], box2[1]);
+  const x2 = Math.min(box1[0] + box1[2], box2[0] + box2[2]);
+  const y2 = Math.min(box1[1] + box1[3], box2[1] + box2[3]);
+  const w = Math.max(0, x2 - x1);
+  const h = Math.max(0, y2 - y1);
+  if (w <= 0 || h <= 0) return 0;
+  const inter = w * h;
+  const area1 = box1[2] * box1[3];
+  const area2 = box2[2] * box2[3];
+  return inter / (area1 + area2 - inter);
+}
+
+async function runTest(session, name, imgUrl) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<h3>${name}</h3><canvas id="canvas-${name}"></canvas><pre id="log-${name}">Loading...</pre>`;
+  document.getElementById('grid').appendChild(card);
+  
+  const canvas = document.getElementById(`canvas-${name}`);
+  const ctx = canvas.getContext('2d');
+  const logEl = document.getElementById(`log-${name}`);
+  
+  const img = new Image();
+  img.src = imgUrl;
+  await new Promise(r => img.onload = r);
+  
+  canvas.width = img.width;
+  canvas.height = img.height;
+  ctx.drawImage(img, 0, 0);
+  
+  // Preprocess (320x320 max)
+  const targetWidth = 320, targetHeight = 320;
+  const scale = Math.min(targetWidth / img.width, targetHeight / img.height);
+  const modelWidth = Math.round(img.width * scale);
+  const modelHeight = Math.round(img.height * scale);
+  const paddedWidth = Math.ceil(modelWidth / 32) * 32;
+  const paddedHeight = Math.ceil(modelHeight / 32) * 32;
+  
+  const pCanvas = document.createElement('canvas');
+  pCanvas.width = paddedWidth;
+  pCanvas.height = paddedHeight;
+  const pCtx = pCanvas.getContext('2d');
+  pCtx.fillStyle = '#000';
+  pCtx.fillRect(0, 0, paddedWidth, paddedHeight);
+  pCtx.drawImage(img, 0, 0, modelWidth, modelHeight);
+  
+  const imgData = pCtx.getImageData(0, 0, paddedWidth, paddedHeight).data;
+  const float32Data = new Float32Array(3 * paddedWidth * paddedHeight);
+  const cSize = paddedWidth * paddedHeight;
+  
+  let min = 999, max = -999;
+  for (let i = 0; i < cSize; i++) {
+    float32Data[i] = imgData[i * 4 + 2]; // B
+    float32Data[cSize + i] = imgData[i * 4 + 1]; // G
+    float32Data[2 * cSize + i] = imgData[i * 4 + 0]; // R
+    min = Math.min(min, float32Data[i], float32Data[cSize + i], float32Data[2*cSize+i]);
+    max = Math.max(max, float32Data[i], float32Data[cSize + i], float32Data[2*cSize+i]);
+  }
+  
+  const tensor = new ort.Tensor('float32', float32Data, [1, 3, paddedHeight, paddedWidth]);
+  
+  let logStr = `[YuNet Preprocess]
+image: ${img.width}x${img.height}
+tensor: [1, 3, ${paddedHeight}, ${paddedWidth}]
+range: [${min}, ${max}]
+format: BGR CHW unnormalized
+`;
+  
+  const t0 = performance.now();
+  const feeds = {};
+  feeds[session.inputNames[0]] = tensor;
+  const results = await session.run(feeds);
+  const inferTime = performance.now() - t0;
+  
+  const metadata = { scale, offsetX: 0, offsetY: 0, paddedWidth, paddedHeight };
+  const faces = decodeYuNet(results, metadata);
+  
+  logStr += `\n[Inference] ${inferTime.toFixed(1)}ms\n[Faces] ${faces.length}\n`;
+  for (const f of faces) {
+    logStr += `score=${f.score.toFixed(3)} box=[${f.box.map(Math.round).join(',')}]\n`;
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(f.box[0], f.box[1], f.box[2], f.box[3]);
+  }
+  
+  logEl.textContent = logStr;
+}
+
+async function init() {
+  ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
+  
+  try {
+    const session = await ort.InferenceSession.create('extension/public/models/face_detection_yunet_2026may.onnx', { executionProviders: ['wasm'] });
+    document.getElementById('loading').style.display = 'none';
+    
+    // We need some sample images. We can use random unsplash images or base64.
+    const images = {
+      'large_frontal': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
+      'small_face': 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=600&h=400&fit=crop',
+      'profile': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop',
+      'multiple': 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600&h=400&fit=crop',
+      'no_face': 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400&h=400&fit=crop'
+    };
+    
+    for (const [name, url] of Object.entries(images)) {
+      // Must fetch image with CORS proxy or just let canvas taint
+      // We will proxy it by fetching as blob
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      await runTest(session, name, objUrl);
+    }
+    
+  } catch (err) {
+    document.getElementById('loading').textContent = 'Error: ' + err.message;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

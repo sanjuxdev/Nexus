@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Python Virtual Environments & Bytecode
+.venv/
+*/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Logs
+test-results/
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Zip archives
+zip_folder/
+
+# Excluded documentation & internal artifacts
+phases/
+readme files/
+docs/
+md_files/
+*.jpeg
+*.jpg

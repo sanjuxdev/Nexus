@@ -1,0 +1,18 @@
+{
+  "capture_id": "cap_login_01",
+  "page_state_hash": "a1b2c3d4e5f60718",
+  "dpr": 1,
+  "viewport": {
+    "w": 1280,
+    "h": 800
+  },
+  "scroll": {
+    "x": 0,
+    "y": 0
+  },
+  "image": {
+    "w": 1280,
+    "h": 800
+  },
+  "ts": 1726820000050
+}

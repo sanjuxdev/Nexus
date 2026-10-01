@@ -1,0 +1,11 @@
+packages:
+  - 'contracts'
+  - 'extension'
+  - 'test-site'
+  - 'tests'
+
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  spawn-sync: true
+  tesseract.js: true

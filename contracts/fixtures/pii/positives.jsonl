@@ -1,0 +1,5 @@
+{"text": "alice.smith@company.org", "type": "EMAIL"}
+{"text": "contact-support@service.gov.in", "type": "EMAIL"}
+{"text": "+91 98765 43210", "type": "PHONE"}
+{"text": "9876543210", "type": "PHONE"}
+{"text": "SecretPassword!123", "type": "PASSWORD"}

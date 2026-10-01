@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stale State Test Site</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 24px;
+    }
+    button {
+      padding: 10px 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stale State Mutation Demo</h1>
+  <div id="target-container">
+    <button id="stale-target-btn">Original Button</button>
+  </div>
+
+  <button id="mutate-btn" onclick="mutateDom()">Simulate Intervening Mutation</button>
+
+  <script>
+    function mutateDom() {
+      const container = document.getElementById('target-container');
+      container.innerHTML = '<button id="replaced-target-btn">Replaced Dynamic Button</button>';
+    }
+  </script>
+</body>
+</html>

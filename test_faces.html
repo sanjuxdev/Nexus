@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Face Detection Test Suite</title>
+  <style>
+    body { font-family: sans-serif; background: #eee; padding: 20px; }
+    .card { background: white; padding: 10px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-block; }
+    .card img { max-width: 400px; display: block; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>YuNet Face Detection Testing</h1>
+
+  <div class="card" id="large-face">
+    <h2>1. Large Face</h2>
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/George_Washington_by_Gilbert_Stuart.jpg/400px-George_Washington_by_Gilbert_Stuart.jpg" alt="Large Face">
+    <p>This is a portrait card.</p>
+  </div>
+
+  <div class="card" id="multiple-small">
+    <h2>2. Small & Multiple Faces</h2>
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/1927_Solvay_Conference_on_Quantum_Mechanics_-_restored_1.jpg/800px-1927_Solvay_Conference_on_Quantum_Mechanics_-_restored_1.jpg" alt="Group Photo" style="max-width: 800px;">
+    <p>Solvay Conference</p>
+  </div>
+
+  <div class="card" id="profile-occluded">
+    <h2>3. Profile & Occluded</h2>
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Abraham_Lincoln_O-116_by_Gardner%2C_1865-crop.png/400px-Abraham_Lincoln_O-116_by_Gardner%2C_1865-crop.png" alt="Profile">
+  </div>
+  
+  <div class="card" id="no-face">
+    <h2>4. No Faces</h2>
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Tour_Eiffel_Wikimedia_Commons.jpg/400px-Tour_Eiffel_Wikimedia_Commons.jpg" alt="Eiffel Tower">
+  </div>
+
+</body>
+</html>

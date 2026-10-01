@@ -1,0 +1,103 @@
+{
+  "snapshot_id": "snap_login_01",
+  "url_origin": "http://localhost:5173",
+  "url_path": "/login-demo.html",
+  "frames": [
+    {
+      "frame_id": "main",
+      "parent_frame_id": null,
+      "origin": "http://localhost:5173",
+      "path": "/login-demo.html",
+      "offset": [0, 0],
+      "accessible": true
+    }
+  ],
+  "elements": [
+    {
+      "dom_id": "d1",
+      "frame_id": "main",
+      "origin": "http://localhost:5173",
+      "tag": "input",
+      "role": "textbox",
+      "name": "Email address",
+      "text": "",
+      "aria": {},
+      "input": {
+        "type": "email",
+        "autocomplete": "email",
+        "name": "email",
+        "placeholder": "Enter your work email",
+        "is_password": false,
+        "has_value": false,
+        "value": ""
+      },
+      "bbox": [120, 140, 300, 40],
+      "visible": true,
+      "in_viewport": true,
+      "occluded": false,
+      "interactable": true,
+      "rendering": "html",
+      "has_bg_image": false,
+      "handlers_hint": false,
+      "parent_dom_id": null
+    },
+    {
+      "dom_id": "d2",
+      "frame_id": "main",
+      "origin": "http://localhost:5173",
+      "tag": "input",
+      "role": "textbox",
+      "name": "Password",
+      "text": "",
+      "aria": {},
+      "input": {
+        "type": "password",
+        "autocomplete": "current-password",
+        "name": "password",
+        "placeholder": "Enter password",
+        "is_password": true,
+        "has_value": false,
+        "value": null
+      },
+      "bbox": [120, 200, 300, 40],
+      "visible": true,
+      "in_viewport": true,
+      "occluded": false,
+      "interactable": true,
+      "rendering": "html",
+      "has_bg_image": false,
+      "handlers_hint": false,
+      "parent_dom_id": null
+    },
+    {
+      "dom_id": "d3",
+      "frame_id": "main",
+      "origin": "http://localhost:5173",
+      "tag": "canvas",
+      "role": null,
+      "name": null,
+      "text": "",
+      "aria": {},
+      "bbox": [120, 260, 160, 45],
+      "visible": true,
+      "in_viewport": true,
+      "occluded": false,
+      "interactable": true,
+      "rendering": "canvas",
+      "has_bg_image": false,
+      "handlers_hint": true,
+      "parent_dom_id": null
+    }
+  ],
+  "viewport": {
+    "w": 1280,
+    "h": 800
+  },
+  "dpr": 1,
+  "scroll": {
+    "x": 0,
+    "y": 0
+  },
+  "page_state_hash": "a1b2c3d4e5f60718",
+  "ts": 1726820000000
+}

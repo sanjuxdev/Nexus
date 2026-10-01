@@ -1,0 +1,22 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": [
+      "chrome"
+    ],
+    "paths": {
+      "@contracts/*": [
+        "../contracts/ts/*"
+      ],
+      "@/*": [
+        "src/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "entrypoints/**/*",
+    "wxt.config.ts"
+  ]
+}

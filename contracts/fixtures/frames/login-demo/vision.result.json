@@ -1,0 +1,61 @@
+{
+  "cycle_id": "cycle_01",
+  "capture_id": "cap_login_01",
+  "regions": [
+    {
+      "region_id": "pending_m1_mint",
+      "local_key": "d3",
+      "source": ["VISION", "OCR"],
+      "semantic_type": "button",
+      "text": "Sign In",
+      "bbox": [120, 260, 160, 45],
+      "confidence": 0.94,
+      "visible": true,
+      "interactable": true,
+      "dom_ref": {
+        "dom_id": "d3",
+        "role": null,
+        "tag": "canvas"
+      },
+      "route": "LOW",
+      "sensitivity": "none",
+      "origin": "http://localhost:5173",
+      "frame_id": "main",
+      "page_state_hash": "a1b2c3d4e5f60718",
+      "timestamp": 1726820000100
+    }
+  ],
+  "ocr_tokens": [
+    {
+      "text": "Sign In",
+      "bbox": [150, 272, 80, 20],
+      "confidence": 0.96,
+      "line_id": 1
+    }
+  ],
+  "faces": [],
+  "unresolved": [],
+  "stats": {
+    "backend": "wasm",
+    "models": [
+      {
+        "name": "yolo-ui-tiny",
+        "version": "1.0.0"
+      }
+    ],
+    "vision_calls": 1,
+    "ocr_calls": 1,
+    "pixels_processed": 7200,
+    "cache_hits": 0,
+    "cache_misses": 1,
+    "escalated": [],
+    "timings_ms": {
+      "crop": 2.1,
+      "preprocess": 5.4,
+      "inference": 45.2,
+      "postprocess": 3.1,
+      "ocr": 18.5,
+      "total": 74.3
+    }
+  }
+}

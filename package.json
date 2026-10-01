@@ -1,0 +1,22 @@
+{
+  "name": "sih26171-root",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter sih26171-extension build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "dev:site": "pnpm --filter test-site dev",
+    "dev:extension": "pnpm --filter sih26171-extension dev",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/chrome": "^0.0.308",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}

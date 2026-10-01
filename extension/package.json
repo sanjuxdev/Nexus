@@ -1,0 +1,32 @@
+{
+  "name": "sih26171-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "CHOKIDAR_USEPOLLING=1 wxt build && cp -r public/* .output/chrome-mv3/",
+    "zip": "wxt zip",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sih/contracts": "workspace:*",
+    "dom-accessibility-api": "^0.7.0",
+    "idb": "^8.0.2",
+    "onnxruntime-web": "^1.21.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tesseract.js": "^6.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.308",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "happy-dom": "^20.14.5",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7",
+    "wxt": "^0.19.28"
+  }
+}

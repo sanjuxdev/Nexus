@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Privacy Engine E2E Test Suite</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
+    .box { margin: 10px; padding: 10px; border: 1px solid #ccc; display: inline-block; background: white; }
+    .large-bg { width: 500px; height: 300px; background: linear-gradient(red, yellow); margin: 20px 0; }
+    #shadow-host { border: 2px dashed blue; padding: 10px; margin: 10px; }
+    canvas { border: 1px solid black; }
+  </style>
+</head>
+<body>
+  <h1>Surgical Redaction Validation</h1>
+
+  <!-- 1. Normal Text (Not Sensitive) -->
+  <div class="box" data-eval-id="normal-text" data-sensitive="false">
+    Just a regular paragraph with no sensitive information here.
+  </div>
+
+  <!-- 2. Email -->
+  <div class="box" data-eval-id="email-test" data-sensitive="true">
+    Contact me at: john.doe@example.com immediately.
+  </div>
+
+  <!-- 3. Phone -->
+  <div class="box" data-eval-id="phone-test" data-sensitive="true">
+    Call us toll free: +1 (555) 123-4567 for help.
+  </div>
+
+  <!-- 4. Password -->
+  <div class="box" data-eval-id="password-test" data-sensitive="true">
+    <input type="password" value="supersecretpassword123">
+  </div>
+
+  <!-- 5. Multiple Faces -->
+  <div class="box" data-eval-id="multiple-faces" data-sensitive="true">
+    <img src="https://thispersondoesnotexist.com/" width="100" height="100" alt="Face 1">
+    <img src="https://thispersondoesnotexist.com/" width="100" height="100" alt="Face 2">
+  </div>
+
+  <!-- 6. Tiny Face -->
+  <div class="box" data-eval-id="tiny-face" data-sensitive="true">
+    <img src="https://thispersondoesnotexist.com/" width="16" height="16" alt="Tiny Avatar">
+  </div>
+
+  <!-- 7. Profile Face -->
+  <div class="box" data-eval-id="profile-face" data-sensitive="true">
+    <img src="https://thispersondoesnotexist.com/" width="150" height="150" alt="User Profile">
+  </div>
+
+  <!-- 8. Canvas (drawn sensitive info) -->
+  <div class="box" data-eval-id="canvas-sensitive" data-sensitive="false">
+    <!-- Extension cannot read canvas text without OCR, so we expect false unless OCR is enabled -->
+    <canvas id="sensitive-canvas" width="200" height="50"></canvas>
+  </div>
+
+  <!-- 9. SVG -->
+  <div class="box" data-eval-id="svg-sensitive" data-sensitive="true">
+    <svg width="200" height="50">
+      <text x="10" y="30" fill="black">secret.admin@corp.com</text>
+    </svg>
+  </div>
+
+  <!-- 10. Shadow DOM -->
+  <div id="shadow-host" data-eval-id="shadow-dom" data-sensitive="true"></div>
+
+  <!-- 11. Large background graphics (prevent massive parent container over-redaction) -->
+  <div class="large-bg" data-eval-id="large-container" data-sensitive="false">
+    <!-- Only the email should be masked, NOT the entire 500x300 container -->
+    <span class="box" data-eval-id="inner-email" data-sensitive="true">admin@hugecorp.com</span>
+  </div>
+
+  <!-- Dynamic Content (Inserted later) -->
+  <div id="dynamic-container"></div>
+
+  <script>
+    // Draw on Canvas
+    const ctx = document.getElementById('sensitive-canvas').getContext('2d');
+    ctx.font = '16px Arial';
+    ctx.fillText("hidden@email.com", 10, 30);
+
+    // Setup Shadow DOM
+    const host = document.getElementById('shadow-host');
+    const shadow = host.attachShadow({mode: 'open'});
+    shadow.innerHTML = `<span>Shadow Email: shadow.ninja@hidden.org</span>`;
+
+    // Setup Dynamic Content
+    setTimeout(() => {
+      const dyn = document.createElement('div');
+      dyn.className = 'box';
+      dyn.setAttribute('data-eval-id', 'dynamic-phone');
+      dyn.setAttribute('data-sensitive', 'true');
+      dyn.innerText = "Dynamic: 987-654-3210";
+      document.getElementById('dynamic-container').appendChild(dyn);
+    }, 1000);
+
+    // E2E Evaluation Logic
+    window.testReport = null;
+
+    function computeIoU(b1, b2) {
+      const xLeft = Math.max(b1.x, b2.x);
+      const yTop = Math.max(b1.y, b2.y);
+      const xRight = Math.min(b1.x + b1.w, b2.x + b2.w);
+      const yBottom = Math.min(b1.y + b1.h, b2.y + b2.h);
+      if (xRight < xLeft || yBottom < yTop) return { iou: 0, intersection: 0 };
+      const intersection = (xRight - xLeft) * (yBottom - yTop);
+      const a1 = b1.w * b1.h;
+      const a2 = b2.w * b2.h;
+      return { iou: intersection / (a1 + a2 - intersection), intersection };
+    }
+
+    const observer = new MutationObserver((mutations) => {
+      const debugDiv = document.getElementById('antigravity-debug-masks');
+      if (debugDiv && !window.testReport) {
+        const text = debugDiv.textContent;
+        if (!text) return;
+        
+        const masks = JSON.parse(text);
+        if (masks.length === 0) return; // wait for masks to be drawn
+
+        const report = {
+          timestamp: Date.now(),
+          total_masks: masks.length,
+          regions: {}
+        };
+
+        document.querySelectorAll('[data-eval-id]').forEach(el => {
+          const id = el.getAttribute('data-eval-id');
+          const isSensitive = el.getAttribute('data-sensitive') === 'true';
+          const rect = el.getBoundingClientRect();
+          const expected = { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+
+          let maxIoU = 0;
+          let maxIntersection = 0;
+          let bestMask = null;
+
+          for (const m of masks) {
+            const { iou, intersection } = computeIoU(expected, m);
+            if (iou > maxIoU) { maxIoU = iou; bestMask = m; }
+            if (intersection > maxIntersection) { maxIntersection = intersection; }
+          }
+
+          let status = 'PASS';
+          let issue = null;
+
+          if (isSensitive) {
+            if (maxIntersection === 0) {
+              status = 'FAIL';
+              issue = 'missed_region';
+            } else if (maxIoU < 0.2 && (bestMask && (bestMask.w * bestMask.h) > (expected.w * expected.h * 2))) {
+              status = 'FAIL';
+              issue = 'over_redaction';
+            }
+          } else {
+            if (maxIntersection > 0) {
+              status = 'FAIL';
+              issue = 'unexpected_region';
+            }
+          }
+
+          report.regions[id] = {
+            expected_sensitive: isSensitive,
+            max_iou: maxIoU,
+            intersection_area: maxIntersection,
+            status,
+            issue
+          };
+        });
+
+        window.testReport = report;
+        console.log('E2E_REPORT_GENERATED', JSON.stringify(report, null, 2));
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  </script>
+</body>
+</html>

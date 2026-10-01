@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portal Login — SIH26171 Test Site</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --radius: 8px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    .profile-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      object-fit: cover;
+      border: 2px solid var(--border);
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    p.subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0;
+    }
+    .form-group {
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    input {
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    input:focus {
+      border-color: var(--primary);
+    }
+    .btn-container {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      align-items: center;
+    }
+    #canvas-login {
+      cursor: pointer;
+      border-radius: var(--radius);
+      border: 1px solid #1d4ed8;
+      display: block;
+    }
+    .standard-btn {
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #status-banner {
+      display: none;
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: var(--radius);
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid #22c55e;
+      color: #15803d;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    /* Own profile - rendered via CSS background, no profile/avatar semantics */
+    .header-icon-342 {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background-image: url('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop');
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <!-- Own profile navigation icon (no semantic roles or obvious aria labels) -->
+  <div class="header-icon-342"></div>
+
+  <div class="card">
+    <div class="profile-header">
+      <!-- Real Face Image to test WebGPU Face Detection Redaction -->
+      <img
+        id="user-avatar"
+        class="avatar"
+        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop"
+        alt="User Face Avatar"
+      />
+      <div>
+        <h1>Account Sign In</h1>
+        <p class="subtitle">Secure Employee Gateway</p>
+      </div>
+    </div>
+
+    <form id="login-form" onsubmit="event.preventDefault();">
+      <div class="form-group">
+        <label for="email-input">Work Email</label>
+        <input
+          id="email-input"
+          type="email"
+          name="email"
+          value="scientist.isro@demo.gov.in"
+          autocomplete="email"
+          placeholder="Enter work email"
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="password-input">Password</label>
+        <input
+          id="password-input"
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          placeholder="Enter secret password"
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="phone-input">Phone Number</label>
+        <input
+          id="phone-input"
+          type="tel"
+          name="phone"
+          value="+91 98765 43210"
+          autocomplete="tel"
+          placeholder="+91 98765 43210"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="aadhaar-input">Aadhaar Identifier</label>
+        <input
+          id="aadhaar-input"
+          type="text"
+          name="aadhaar"
+          value="5489 1234 5674"
+          placeholder="XXXX XXXX XXXX"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="pan-input">PAN Number</label>
+        <input
+          id="pan-input"
+          type="text"
+          name="pan"
+          value="ABCPE1234F"
+          placeholder="ABCDE1234F"
+        />
+      </div>
+
+      <div class="btn-container">
+        <!-- Canvas-drawn custom Login button (routed to LOW in router) -->
+        <canvas id="canvas-login" width="160" height="42"></canvas>
+
+        <button type="button" id="reset-btn" class="standard-btn" onclick="document.getElementById('login-form').reset();">
+          Clear
+        </button>
+      </div>
+
+      <div id="status-banner" role="alert">
+        ✓ Authentication successful! Welcome, <span id="authed-user">User</span>.
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // Draw Custom Button on Canvas
+    const canvas = document.getElementById('canvas-login');
+    const ctx = canvas.getContext('2d');
+
+    function drawButton(hover = false) {
+      ctx.fillStyle = hover ? '#1d4ed8' : '#2563eb';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, canvas.width, canvas.height, 8);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Sign In', canvas.width / 2, canvas.height / 2);
+    }
+
+    drawButton();
+
+    canvas.addEventListener('mouseenter', () => drawButton(true));
+    canvas.addEventListener('mouseleave', () => drawButton(false));
+
+    function triggerLogin() {
+      const email = document.getElementById('email-input').value || 'testuser@demo.local';
+      const banner = document.getElementById('status-banner');
+      const authedSpan = document.getElementById('authed-user');
+      authedSpan.textContent = email;
+      banner.style.display = 'block';
+    }
+
+    canvas.addEventListener('click', triggerLogin);
+  </script>
+</body>
+</html>
