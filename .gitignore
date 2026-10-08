@@ -1,10 +1,32 @@
+# User exclusions
+*.md
+!README.md
+*.pdf
+*.zip
+zip_folder/
+sih/
+sih.zip
+memory.md
+__agent__/
+
+# Photos / Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp
+*.bmp
+*.tiff
+*.ico
+
 # Dependencies
 node_modules/
-*/node_modules/
+**/node_modules/
 
 # Python Virtual Environments & Bytecode
 .venv/
-*/.venv/
+**/.venv/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,18 +34,8 @@ __pycache__/
 # Testing & Logs
 test-results/
 *.log
+.dev-captures/
 
-# System files
+# OS / System files
 .DS_Store
 Thumbs.db
-
-# Zip archives
-zip_folder/
-
-# Excluded documentation & internal artifacts
-phases/
-readme files/
-docs/
-md_files/
-*.jpeg
-*.jpg
