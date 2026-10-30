@@ -36,27 +36,47 @@ let ocrWorker: Tesseract.Worker | null = null;
 
 /**
  * Initialize OCR worker (reusable across multiple images)
+ * Uses Tesseract.js default CDN for language data and WASM core
  */
 async function ensureOcrWorker(config: OcrConfig = DEFAULT_CONFIG): Promise<Tesseract.Worker> {
   if (!ocrWorker) {
-    ocrWorker = await Tesseract.createWorker(config.languages, 1, {
-      logger: () => {}, // Suppress verbose Tesseract logs
-      errorHandler: (err: any) => console.warn('[OCR] Worker error:', err),
-    });
+    console.log('[OCR] Initializing Tesseract.js worker (language: eng)...');
     
-    // Configure for speed vs accuracy trade-off
-    if (config.mode === 'fast') {
-      // PSM 3 = Fully automatic page segmentation (no OSD)
-      // OEM 1 = LSTM neural nets mode (faster than legacy + LSTM combo)
-      await ocrWorker.setParameters({
-        tessedit_pageseg_mode: Tesseract.PSM.AUTO,
-        tessedit_ocr_engine_mode: Tesseract.OEM.LSTM_ONLY,
+    try {
+      ocrWorker = await Tesseract.createWorker(config.languages[0] || 'eng', 1, {
+        logger: (m: any) => {
+          // Log initialization progress
+          if (m.status && ['recognizing text', 'loading tesseract core', 'initializing tesseract', 'loading language traineddata'].includes(m.status)) {
+            console.log(`[OCR] ${m.status}${m.progress ? ` (${(m.progress * 100).toFixed(0)}%)` : ''}`);
+          }
+        },
+        errorHandler: (err: any) => {
+          console.error('[OCR] Worker error:', err);
+        },
       });
-    } else {
-      await ocrWorker.setParameters({
-        tessedit_pageseg_mode: Tesseract.PSM.AUTO,
-        tessedit_ocr_engine_mode: Tesseract.OEM.DEFAULT,
-      });
+      
+      console.log('[OCR] Worker created, configuring parameters...');
+      
+      // Configure for speed vs accuracy trade-off
+      if (config.mode === 'fast') {
+        // PSM 3 = Fully automatic page segmentation (no OSD)
+        // OEM 1 = LSTM neural nets mode (faster than legacy + LSTM combo)
+        await ocrWorker.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.AUTO,
+          tessedit_ocr_engine_mode: Tesseract.OEM.LSTM_ONLY,
+        });
+      } else {
+        await ocrWorker.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.AUTO,
+          tessedit_ocr_engine_mode: Tesseract.OEM.DEFAULT,
+        });
+      }
+      
+      console.log('[OCR] ✓ Worker initialized and ready for text extraction');
+    } catch (initErr) {
+      console.error('[OCR] ✗ Failed to initialize worker:', initErr);
+      ocrWorker = null;
+      throw initErr;
     }
   }
   return ocrWorker;

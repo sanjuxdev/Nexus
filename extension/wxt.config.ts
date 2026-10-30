@@ -38,7 +38,7 @@ export default defineConfig({
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
     cross_origin_embedder_policy: {
-      value: "require-corp"
+      value: "credentialless" // Allow CDN requests for Tesseract.js
     },
     cross_origin_opener_policy: {
       value: "same-origin"
