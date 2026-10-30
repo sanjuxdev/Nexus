@@ -203,7 +203,7 @@ export const visionEngine = {
       
       // Phase 2/3: OCR Integration for image-based PII detection
       // Extract text from images, documents, and screenshots for privacy analysis
-      // Only run OCR when there are actual image elements that could contain text
+      // Run OCR when there are image elements OR when on document viewer domains
       const hasImageElements = req.dom?.elements?.some(
         (el) =>
           el.visible &&
@@ -211,11 +211,25 @@ export const visionEngine = {
           (el.rendering === 'img' ||
             el.rendering === 'canvas' ||
             el.tag === 'img' ||
+            el.tag === 'canvas' ||
+            el.tag === 'embed' ||
             el.has_bg_image) &&
-          el.bbox[2] * el.bbox[3] >= 10000 // Minimum 100x100px threshold for OCR
+          el.bbox[2] * el.bbox[3] >= 2500 // Minimum 50x50px threshold (lowered from 100x100)
       );
+      
+      // Always run OCR on known document viewer domains where PII is likely
+      const isDocumentViewerDomain = /(?:scribd\.com|docs\.google\.com|drive\.google\.com|pdf|document)/i.test(
+        req.dom?.url_origin || ''
+      );
+      
+      const shouldRunOcr = (hasImageElements || isDocumentViewerDomain) && req.image_data_url;
+      
+      console.log(`[OCR_ACTIVATION] hasImageElements=${hasImageElements}, isDocumentViewerDomain=${isDocumentViewerDomain}, hasScreenshot=${!!req.image_data_url}, willRunOcr=${shouldRunOcr}`);
+      if (!shouldRunOcr && req.image_data_url) {
+        console.warn(`[OCR_SKIPPED] Screenshot exists but OCR not triggered. Domain: ${req.dom?.url_origin}, Image elements found: ${req.dom?.elements?.filter(el => el.visible && el.in_viewport && (el.tag === 'img' || el.tag === 'canvas')).length || 0}`);
+      }
 
-      if (hasImageElements && req.image_data_url) {
+      if (shouldRunOcr) {
         try {
           const tOcr0 = performance.now();
           const viewport = req.capture?.viewport || { w: 1280, h: 800 };
