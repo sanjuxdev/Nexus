@@ -356,9 +356,49 @@ export class PerceptionDaemon implements IPerceptionPipeline {
     let captureMeta: any = null;
     let latestDataUrl: string | undefined;
 
-    // In privacy-only mode (where allowed_actions is empty), we MUST always run vision 
-    // to detect faces and visual PII, even if the router thinks no elements require it.
-    const requiresVision = plan.needs_screenshot || session.allowed_actions.length === 0;
+    // Screenshot capture optimization: Only capture when actually needed for vision tasks.
+    // The router identifies elements requiring visual analysis and sets needs_screenshot.
+    // 
+    // Special case for privacy-only mode: Even if router doesn't flag specific elements,
+    // we check if there are ANY visual elements (images, canvas, video) in the DOM that
+    // could contain faces or visual PII. This prevents blanket screenshot capture on every
+    // cycle while still covering visual privacy threats when they're actually present.
+    let requiresVision = plan.needs_screenshot;
+    
+    // ALWAYS capture screenshot when privacy protection is enabled
+    // This ensures the sanitized preview is available for user verification
+    if (!requiresVision && flags.privacy !== 'off') {
+      const hasVisualContent = domSnapshot.elements.some(
+        (el) => el.visible && el.in_viewport && 
+                (el.rendering === 'img' || el.rendering === 'video' || 
+                 el.rendering === 'canvas' || el.has_bg_image)
+      );
+      if (hasVisualContent) {
+        requiresVision = true;
+        console.log('[PerceptionDaemon] Privacy protection active: Forcing screenshot for sanitized preview');
+      }
+    }
+    
+    if (!requiresVision && session.allowed_actions.length === 0) {
+      // Privacy-only mode: Check if there are any visual elements in the DOM
+      const hasVisualElements = domSnapshot.elements.some(
+        (el) =>
+          el.visible &&
+          el.in_viewport &&
+          (el.rendering === 'img' ||
+            el.rendering === 'video' ||
+            el.rendering === 'canvas' ||
+            el.has_bg_image) &&
+          el.bbox[2] * el.bbox[3] >= 1600 // Minimum 40x40px area threshold
+      );
+      
+      if (hasVisualElements) {
+        requiresVision = true;
+        console.log('[PerceptionDaemon] Privacy mode: Visual elements detected, capturing screenshot for face/PII detection');
+      } else {
+        console.log('[PerceptionDaemon] Privacy mode: No visual elements in viewport, skipping screenshot');
+      }
+    }
 
     if (requiresVision) {
       session.state = 'VISION';

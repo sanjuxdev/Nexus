@@ -907,15 +907,21 @@ export const privacyStub = {
 
     console.log(`[MASK] boxesToMask count before redactImageCanvas: ${boxesToMask.length}`);
     console.log(`[PRIVACY] Face regions in req.frame.faces: ${req.frame.faces?.length || 0}`);
+    console.log(`[PRIVACY_DEBUG] req.image_data_url exists: ${!!req.image_data_url}, length: ${req.image_data_url?.length || 0}`);
 
     let maskedDataUrl: string | null = null;
     if (boxesToMask.length > 0 && req.image_data_url) {
+      console.log(`[PRIVACY_DEBUG] Attempting to generate sanitized preview with ${boxesToMask.length} boxes`);
       try {
         const viewport = req.frame.dom?.viewport || req.frame.capture?.viewport;
+        console.log(`[PRIVACY_DEBUG] Viewport:`, viewport);
         maskedDataUrl = await redactImageCanvas(req.image_data_url, boxesToMask, viewport);
+        console.log(`[PRIVACY_DEBUG] ✓ Sanitized preview generated, length: ${maskedDataUrl?.length || 0}`);
       } catch (err) {
-        console.warn('Could not generate masked data url:', err);
+        console.error('[PRIVACY_DEBUG] ✗ Failed to generate sanitized preview:', err);
       }
+    } else {
+      console.warn(`[PRIVACY_DEBUG] ✗ Cannot generate sanitized preview: boxesToMask=${boxesToMask.length}, hasImage=${!!req.image_data_url}`);
     }
 
     return {
