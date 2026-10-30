@@ -82,6 +82,12 @@ export function validateIndianPAN(panStr: string): boolean {
 }
 
 import { redactImageWebGPU } from './webgpu-redact.js';
+import { analyzeDocumentFields, documentFieldsToPiiCandidates } from './privacy/detectors/document-fields.js';
+import {
+  deduplicateDetections,
+  deduplicateRedactionBoxes,
+  filterOversizedBoxes,
+} from './privacy/deduplication.js';
 
 /**
  * Canvas-based visual blackout redaction for sensitive bounding boxes.
@@ -306,6 +312,82 @@ export const privacyStub = {
     let textReplacements = 0;
     const boxesToMask: { x: number; y: number; w: number; h: number; label: string; source?: string }[] = [];
     let totalMaskedAreaPx = 0;
+
+    // PHASE 1: Document-Level Multi-Field Detection
+    // Process OCR tokens grouped by source image to detect multiple PII fields
+    // within documents (e.g., PAN card → detect PAN number, name, DOB, father's name, signature)
+    // This addresses the "missing fields" problem where only one field was detected per document.
+    
+    if (req.frame.ocr_tokens && req.frame.ocr_tokens.length > 0) {
+      // Group OCR tokens by their spatial proximity to image elements
+      // An image element that overlaps with OCR tokens likely contains the text
+      const imageElements = req.frame.regions.filter(
+        (r) =>
+          r.semantic_type === 'image' ||
+          r.source.includes('VISION') ||
+          (r.dom_ref?.tag === 'img') ||
+          (r.dom_ref?.tag === 'canvas')
+      );
+
+      for (const imageRegion of imageElements) {
+        // Find OCR tokens that fall within or near this image's bounding box
+        const [imgX, imgY, imgW, imgH] = imageRegion.bbox;
+        const padding = 10; // Allow some tolerance for alignment
+
+        const associatedTokens = req.frame.ocr_tokens.filter((token) => {
+          const [tokenX, tokenY, tokenW, tokenH] = token.bbox;
+          return (
+            tokenX >= imgX - padding &&
+            tokenY >= imgY - padding &&
+            tokenX + tokenW <= imgX + imgW + padding &&
+            tokenY + tokenH <= imgY + imgH + padding
+          );
+        });
+
+        if (associatedTokens.length > 0) {
+          // Analyze this image's OCR tokens for document fields
+          const docAnalysis = analyzeDocumentFields(associatedTokens, imageRegion.bbox);
+
+          if (docAnalysis.fields.length > 0) {
+            console.log(
+              `[DocumentDetection] Found ${docAnalysis.fields.length} fields in ${docAnalysis.documentType} (region: ${imageRegion.region_id})`
+            );
+
+            // Convert document fields to PII detections
+            const fieldCandidates = documentFieldsToPiiCandidates(
+              docAnalysis,
+              imageRegion.region_id
+            );
+
+            for (const candidate of fieldCandidates) {
+              detections.push({
+                id: candidate.id,
+                type: candidate.category,
+                source: ['OCR', 'VISION'],
+                region_id: imageRegion.region_id,
+                bbox: candidate.bbox,
+                span: null,
+                confidence: candidate.confidence,
+                mandatory: candidate.isMandatory,
+              });
+
+              // Add precise field-level masking box
+              boxesToMask.push({
+                x: candidate.bbox![0],
+                y: candidate.bbox![1],
+                w: candidate.bbox![2],
+                h: candidate.bbox![3],
+                label: candidate.specificSubtype,
+                source: 'OCR',
+              });
+
+              totalMaskedAreaPx += candidate.bbox![2] * candidate.bbox![3];
+              textReplacements++;
+            }
+          }
+        }
+      }
+    }
 
     const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
     const aadhaarRegex = /\b[2-9]\d{3}[\s-]?\d{4}[\s-]?\d{4}\b/g;
@@ -733,6 +815,31 @@ export const privacyStub = {
         totalMaskedAreaPx += face.bbox[2] * face.bbox[3];
       });
     }
+
+    // PHASE 2: Deduplication & Precision Filtering
+    // Remove duplicate detections from multiple sources and filter oversized boxes
+    // This prevents one large black rectangle from covering the entire page
+    const deduplicatedDetections = deduplicateDetections(detections, 0.7);
+    const deduplicatedBoxes = deduplicateRedactionBoxes(boxesToMask, 0.7);
+    const preciseBoxes = filterOversizedBoxes(
+      deduplicatedBoxes,
+      800, // Max width
+      600, // Max height
+      req.frame.dom.viewport
+    );
+
+    // Replace with deduplicated results
+    detections.length = 0;
+    detections.push(...deduplicatedDetections);
+    boxesToMask.length = 0;
+    boxesToMask.push(...preciseBoxes);
+
+    // Recalculate masked area
+    totalMaskedAreaPx = boxesToMask.reduce((sum, box) => sum + box.w * box.h, 0);
+
+    console.log(
+      `[Deduplication] Reduced from ${req.frame.regions.length} regions to ${detections.length} unique detections, ${boxesToMask.length} redaction boxes`
+    );
 
     const capabilities: CapabilityDescriptor[] = Object.values(DEMO_VAULT)
       .filter((entry) => entry.allowed_origins.includes(origin))

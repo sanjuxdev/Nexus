@@ -1,5 +1,6 @@
 import * as ort from 'onnxruntime-web/webgpu';
 import Tesseract from 'tesseract.js';
+import { extractTextFromImage, reconstructTextWithSpacing } from './ocr-processor.js';
 import { YuNetVisionEngine } from './yunet/yunet-engine.js';
 import { YUNET_STANDARD_CONFIG } from './yunet/yunet-config.js';
 
@@ -200,48 +201,70 @@ export const visionEngine = {
         console.warn('[VisionEngine] Vision inference failed, falling back...', e);
       }
       
-      // Phase 2/3: OCR Integration for precise micro-bounding boxes
-      // Note: In Chrome Extension MV3, Tesseract remote CDN workers violate extension CSP.
-      // We safely bypass remote CDN loading unless explicitly configured with local worker paths.
-      if (typeof Worker !== 'undefined' && (globalThis as any).__ENABLE_LOCAL_OCR__) {
+      // Phase 2/3: OCR Integration for image-based PII detection
+      // Extract text from images, documents, and screenshots for privacy analysis
+      // Only run OCR when there are actual image elements that could contain text
+      const hasImageElements = req.dom?.elements?.some(
+        (el) =>
+          el.visible &&
+          el.in_viewport &&
+          (el.rendering === 'img' ||
+            el.rendering === 'canvas' ||
+            el.tag === 'img' ||
+            el.has_bg_image) &&
+          el.bbox[2] * el.bbox[3] >= 10000 // Minimum 100x100px threshold for OCR
+      );
+
+      if (hasImageElements && req.image_data_url) {
         try {
           const tOcr0 = performance.now();
-          const result = await Tesseract.recognize(req.image_data_url, 'eng', {
-            logger: () => {} // Mute logger
-          });
-          ocrMs = performance.now() - tOcr0;
-          
-          (result.data as any)?.words?.forEach((word: any, index: number) => {
-            const bbox: [number, number, number, number] = [word.bbox.x0, word.bbox.y0, word.bbox.x1 - word.bbox.x0, word.bbox.y1 - word.bbox.y0];
-            ocr_tokens.push({
-              text: word.text,
-              bbox: bbox,
-              confidence: word.confidence / 100,
-              line_id: word.line?.id || index
-            });
+          const viewport = req.capture?.viewport || { w: 1280, h: 800 };
+          const ocrResult = await extractTextFromImage(
+            req.image_data_url,
+            viewport,
+            {
+              languages: ['eng'], // Start with English, expand incrementally
+              mode: 'fast',
+              confidenceThreshold: 60,
+            }
+          );
+          ocrMs = ocrResult.processingTimeMs;
+
+          // Add OCR tokens to result
+          ocr_tokens.push(...ocrResult.tokens);
+
+          // Create regions from high-confidence OCR tokens for PII detection
+          // Each word becomes a separate region to enable precise field-level detection
+          for (let i = 0; i < ocrResult.tokens.length; i++) {
+            const token = ocrResult.tokens[i]!;
             
             regions.push({
-              region_id: `ocr_reg_${index}`,
-              local_key: `ocr_${index}`,
+              region_id: `ocr_word_${i}`,
+              local_key: `ocr_${i}`,
               dom_ref: null,
-              source: ['OCR', 'VISION'],
+              source: ['OCR'],
               semantic_type: 'text',
-              text: word.text,
-              bbox: bbox,
-              confidence: word.confidence / 100,
+              text: token.text,
+              visual_text: token.text,
+              bbox: token.bbox,
+              confidence: token.confidence,
               visible: true,
               interactable: false,
-              visual_state: ['visible', 'enabled'],
-              route: 'LOW',
+              visual_state: ['visible'],
+              route: 'MEDIUM', // OCR regions warrant medium-confidence routing
               sensitivity: 'none',
               origin: req.dom.url_origin,
               frame_id: 'main',
               page_state_hash: req.dom.page_state_hash,
               timestamp: Date.now(),
             });
-          });
+          }
+
+          console.log(
+            `[VisionEngine] OCR extracted ${ocrResult.tokens.length} words in ${ocrMs.toFixed(0)}ms`
+          );
         } catch (e) {
-          console.warn("Tesseract OCR skipped in this context:", e);
+          console.warn('[VisionEngine] OCR extraction failed:', e);
         }
       }
     }
