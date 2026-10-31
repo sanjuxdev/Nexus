@@ -34,8 +34,9 @@ describe('Multi-Field Document Detection', () => {
       { text: 'DEPARTMENT', bbox: [240, 50, 120, 20], confidence: 0.95, line_number: 0, word_index: 2 },
       
       // Line 2: PAN Label + Number (on same line for realistic detection)
+      // Valid PAN format: First 3 letters, 4th is entity type (P=Person), 5th initial, next 4 digits, last check letter
       { text: 'PAN:', bbox: [100, 100, 50, 18], confidence: 0.94, line_number: 1, word_index: 0 },
-      { text: 'ABCDE1234F', bbox: [155, 100, 150, 22], confidence: 0.98, line_number: 1, word_index: 1 },
+      { text: 'ABCPJ1234K', bbox: [155, 100, 150, 22], confidence: 0.98, line_number: 1, word_index: 1 },
       
       // Line 3: Name Label + Value
       { text: 'Name:', bbox: [100, 170, 60, 18], confidence: 0.94, line_number: 3, word_index: 0 },
