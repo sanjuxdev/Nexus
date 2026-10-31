@@ -29,7 +29,7 @@ export interface OcrExtractionResult {
 const DEFAULT_CONFIG: OcrConfig = {
   languages: ['eng'], // Start with English, expand incrementally
   mode: 'fast',
-  confidenceThreshold: 60, // Minimum 60% confidence for privacy-critical detection
+  confidenceThreshold: 25, // Lowered from 60 to 25 to reliably detect ID card numbers and names
 };
 
 let ocrWorker: Tesseract.Worker | null = null;
@@ -39,11 +39,14 @@ let ocrWorker: Tesseract.Worker | null = null;
  * Uses Tesseract.js default CDN for language data and WASM core
  */
 async function ensureOcrWorker(config: OcrConfig = DEFAULT_CONFIG): Promise<Tesseract.Worker> {
+  const languages = (config && config.languages && config.languages.length > 0) ? config.languages : DEFAULT_CONFIG.languages;
+  const primaryLang = languages[0] || 'eng';
+
   if (!ocrWorker) {
-    console.log('[OCR] Initializing Tesseract.js worker (language: eng)...');
+    console.log(`[OCR] Initializing Tesseract.js worker (language: ${primaryLang})...`);
     
     try {
-      ocrWorker = await Tesseract.createWorker(config.languages[0] || 'eng', 1, {
+      ocrWorker = await Tesseract.createWorker(primaryLang, 1, {
         logger: (m: any) => {
           // Log initialization progress
           if (m.status && ['recognizing text', 'loading tesseract core', 'initializing tesseract', 'loading language traineddata'].includes(m.status)) {
@@ -100,71 +103,103 @@ export async function extractTextFromImage(
   try {
     const worker = await ensureOcrWorker(config);
     
-    // Perform OCR recognition
-    const result = await worker.recognize(imageData as any);
+    // In Tesseract.js v5/v6, blocks: true must be passed in options to populate words/lines
+    const result = await worker.recognize(imageData as any, {}, { blocks: true } as any);
     const processingTimeMs = performance.now() - t0;
     
+    const languages = (config && config.languages && config.languages.length > 0) ? config.languages : DEFAULT_CONFIG.languages;
+    const primaryLang = languages[0] || 'eng';
+
     if (!result || !result.data) {
       return {
         tokens: [],
         fullText: '',
         processingTimeMs,
-        languageUsed: config.languages[0] || 'eng',
+        languageUsed: primaryLang,
       };
     }
     
-    const { words, text } = result.data;
-    const fullText = text || '';
+    const fullText = result.data.text || '';
     
-    // Convert Tesseract word results to OcrToken format
-    const tokens: OcrToken[] = [];
-    
-    if (words && Array.isArray(words)) {
-      for (let i = 0; i < words.length; i++) {
-        const word = words[i];
-        if (!word || !word.text || !word.bbox) continue;
-        
-        const confidence = word.confidence || 0;
-        
-        // Filter out low-confidence noise
-        if (confidence < config.confidenceThreshold) {
-          continue;
+    // In Tesseract.js v5/v6, words are organized in blocks -> paragraphs -> lines -> words
+    const rawWords: Array<{ word: any; lineId: number }> = [];
+    let lineIndex = 0;
+    if (result.data.blocks && Array.isArray(result.data.blocks)) {
+      for (const block of result.data.blocks) {
+        for (const para of (block.paragraphs || [])) {
+          for (const line of (para.lines || [])) {
+            const lineId = typeof (line as any).lineNumber === 'number' ? (line as any).lineNumber : lineIndex++;
+            for (const word of (line.words || [])) {
+              rawWords.push({
+                word,
+                lineId,
+              });
+            }
+          }
         }
-        
-        // Tesseract bbox format: { x0, y0, x1, y1 }
-        // Convert to our BBox format: [x, y, width, height]
-        const bbox: BBox = [
-          word.bbox.x0,
-          word.bbox.y0,
-          word.bbox.x1 - word.bbox.x0,
-          word.bbox.y1 - word.bbox.y0,
-        ];
-        
-        tokens.push({
-          text: word.text,
-          bbox,
-          confidence: confidence / 100, // Normalize to 0-1 range
-          line_number: word.line?.lineNumber || 0,
-          word_index: i,
+      }
+    } else if ((result.data as any).words && Array.isArray((result.data as any).words)) {
+      for (const word of (result.data as any).words) {
+        rawWords.push({
+          word,
+          lineId: (word as any).line_id ?? (word as any).line?.lineNumber ?? 0,
         });
       }
     }
     
-    console.log(`[OCR] Extracted ${tokens.length} words in ${processingTimeMs.toFixed(0)}ms (confidence >= ${config.confidenceThreshold})`);
+    // Convert Tesseract word results to OcrToken format
+    const tokens: OcrToken[] = [];
+    const minConfidence = config.confidenceThreshold ?? 25;
+    
+    for (let i = 0; i < rawWords.length; i++) {
+      const item = rawWords[i];
+      if (!item) continue;
+      const { word, lineId } = item;
+      if (!word || !word.text || !word.bbox) continue;
+      
+      const text = String(word.text).trim();
+      if (!text) continue;
+      
+      const confidence = typeof word.confidence === 'number' ? word.confidence : 50;
+      
+      // Filter out low-confidence noise
+      if (confidence < minConfidence) {
+        continue;
+      }
+      
+      // Tesseract bbox format: { x0, y0, x1, y1 }
+      // Convert to our BBox format: [x, y, width, height]
+      const bbox: BBox = [
+        Math.round(word.bbox.x0),
+        Math.round(word.bbox.y0),
+        Math.round(word.bbox.x1 - word.bbox.x0),
+        Math.round(word.bbox.y1 - word.bbox.y0),
+      ];
+      
+      tokens.push({
+        text,
+        bbox,
+        confidence: confidence / 100, // Normalize to 0-1 range
+        line_id: lineId,
+      });
+    }
+    
+    console.log(`[OCR] Extracted ${tokens.length} words in ${processingTimeMs.toFixed(0)}ms (confidence >= ${minConfidence})`);
     
     return {
       tokens,
       fullText,
       processingTimeMs,
-      languageUsed: config.languages[0] || 'eng',
+      languageUsed: primaryLang,
     };
   } catch (err) {
     console.error('[OCR] Text extraction failed:', err);
+    const languages = (config && config.languages && config.languages.length > 0) ? config.languages : DEFAULT_CONFIG.languages;
     return {
       tokens: [],
       fullText: '',
       processingTimeMs: performance.now() - t0,
-      languageUsed: config.languages[0] || 'eng',
+      languageUsed: languages[0] || 'eng',
     };
   }
 }
@@ -183,7 +218,7 @@ export async function terminateOcrWorker(): Promise<void> {
  * Group OCR tokens into logical text lines based on vertical proximity.
  * Useful for detecting multi-word field values (e.g., "Date of Birth: 15/08/1990")
  */
-export function groupTokensIntoLines(tokens: OcrToken[], lineHeightThreshold = 5): OcrToken[][] {
+export function groupTokensIntoLines(tokens: OcrToken[], lineHeightThreshold = 10): OcrToken[][] {
   if (tokens.length === 0) return [];
   
   // Sort by Y position first, then X position
@@ -214,6 +249,11 @@ export function groupTokensIntoLines(tokens: OcrToken[], lineHeightThreshold = 5
   
   if (currentLine.length > 0) {
     lines.push(currentLine);
+  }
+
+  // Ensure tokens within each line are ordered strictly left-to-right by X coordinate
+  for (const line of lines) {
+    line.sort((a, b) => a.bbox[0] - b.bbox[0]);
   }
   
   return lines;

@@ -41,8 +41,24 @@ export function validateAadhaarVerhoeff(aadhaarStr: string): boolean {
   return c === 0;
 }
 
+export function normalizePanForOcr(panStr: string): string {
+  const clean = panStr.replace(/[^A-Za-z0-9]/g, '').trim().toUpperCase();
+  if (clean.length === 10) {
+    const prefix = clean.slice(0, 5);
+    const middle = clean.slice(5, 9)
+      .replace(/[OQ]/g, '0')
+      .replace(/[ILl]/g, '1')
+      .replace(/[Z]/g, '2')
+      .replace(/[S]/g, '5')
+      .replace(/[B]/g, '8');
+    const suffix = clean.slice(9);
+    return `${prefix}${middle}${suffix}`;
+  }
+  return clean;
+}
+
 export function validateIndianPAN(panStr: string): boolean {
-  const clean = panStr.trim().toUpperCase();
+  const clean = normalizePanForOcr(panStr);
   if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(clean)) return false;
   // 4th character must be one of the recognized PAN entity types
   const validEntityTypes = new Set(['P', 'C', 'H', 'F', 'A', 'T', 'B', 'L', 'J', 'G']);
@@ -203,7 +219,9 @@ export const panDetector: PiiDetector = {
     if (sem.includes('pan card') || sem.includes('pan number') || sem.includes('permanent account number') || /\bpan\b/.test(sem)) {
       return true;
     }
-    return /\b[A-Za-z]{5}\d{4}[A-Za-z]\b/.test(text);
+    return /\b[A-Za-z]{3}[PCHFATBLJGpchfatbljg][A-Za-z][\s\-]?[0-9OIl]{4}[\s\-]?[A-Za-z]\b/.test(text) ||
+           /\b[A-Za-z]{5}[\s\-]?[0-9OIl]{4}[\s\-]?[A-Za-z]\b/.test(text) ||
+           /\b[A-Za-z]{5}\d{4}[A-Za-z]\b/.test(text);
   },
 
   detect(text: string, context?: DetectorContext): DetectorValidationResult | null {
@@ -221,15 +239,18 @@ export const panDetector: PiiDetector = {
       sem.includes('permanent account number') ||
       /\bpan\b/.test(sem);
 
-    const panMatches = text.match(/\b[A-Za-z]{5}\d{4}[A-Za-z]\b/g);
+    const panMatches = text.match(/\b([A-Za-z]{3}[PCHFATBLJGpchfatbljg][A-Za-z][\s\-]?[0-9OIl]{4}[\s\-]?[A-Za-z])\b/gi) ||
+                       text.match(/\b([A-Za-z]{5}[\s\-]?[0-9OIl]{4}[\s\-]?[A-Za-z])\b/gi) ||
+                       text.match(/\b[A-Za-z]{5}\d{4}[A-Za-z]\b/g);
     if (panMatches) {
       for (const match of panMatches) {
         if (validateIndianPAN(match)) {
+          const normalized = normalizePanForOcr(match);
           const evidence: PiiSignalEvidence[] = [
             {
               field: 'format_rule',
-              matchedValue: match.toUpperCase(),
-              matchedRule: `pan_entity_type_${match.toUpperCase()[3]}`,
+              matchedValue: match,
+              matchedRule: `pan_entity_type_${normalized[3]}`,
               signalStrength: 'high',
             },
           ];

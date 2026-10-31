@@ -367,7 +367,7 @@ export class PerceptionDaemon implements IPerceptionPipeline {
     
     // ALWAYS capture screenshot when privacy protection is enabled
     // This ensures the sanitized preview is available for user verification
-    if (!requiresVision && flags.privacy !== 'off') {
+    if (!requiresVision && (flags.privacy as string) !== 'off') {
       const hasVisualContent = domSnapshot.elements.some(
         (el) => el.visible && el.in_viewport && 
                 (el.rendering === 'img' || el.rendering === 'video' || 
@@ -449,7 +449,7 @@ export class PerceptionDaemon implements IPerceptionPipeline {
         plan,
       };
 
-      const rawVisResp = await bus.send('vision/perceive', visReq, { timeoutMs: 3000 }).catch((e) => ({ ok: false, error: e?.message || 'VISION_RUNTIME_UNAVAILABLE' }));
+      const rawVisResp = await bus.send('vision/perceive', visReq, { timeoutMs: 10000 }).catch((e) => ({ ok: false, error: e?.message || 'VISION_RUNTIME_UNAVAILABLE' }));
       const visResp = rawVisResp as any;
       if (visResp && visResp.ok && visResp.data) {
         visionResult = visResp.data as VisionResult;

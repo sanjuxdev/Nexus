@@ -101,7 +101,7 @@ async function runPrivacyLoop(session: TaskSession, abortController: AbortContro
         state: 'PERCEIVING',
         privacy_audit: {
           attestation_digest: res.sanRes.attested?.sha256 || null,
-          egress_body_preview: null,
+          egress_body_preview: res.sanRes.attested?.body ? (() => { try { return JSON.stringify(JSON.parse(res.sanRes.attested.body), null, 2); } catch { return res.sanRes.attested.body; } })() : null,
           masked_image_url: res.sanRes.masked_data_url || null,
           items: res.sanRes.detections.map((d: any) => ({
             id: d.id,
@@ -141,6 +141,9 @@ export const privacyController = {
       activeAbortController.abort();
     }
     activeAbortController = new AbortController();
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      await chrome.storage.session.set({ nexusProtectionEnabled: true, nexusProtectionTabId: tabId });
+    }
 
     try {
       await ensureOffscreen();
@@ -196,6 +199,9 @@ export const privacyController = {
   async stopProtection(taskId?: string): Promise<void> {
     console.log('[PrivacyController] Stopping protection');
     isProtecting = false;
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      await chrome.storage.session.set({ nexusProtectionEnabled: false });
+    }
     if (activeAbortController) {
       activeAbortController.abort();
       activeAbortController = null;

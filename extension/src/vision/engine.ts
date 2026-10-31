@@ -233,25 +233,115 @@ export const visionEngine = {
         try {
           const tOcr0 = performance.now();
           const viewport = req.capture?.viewport || { w: 1280, h: 800 };
-          const ocrResult = await extractTextFromImage(
-            req.image_data_url,
-            viewport,
-            {
-              languages: ['eng'], // Start with English, expand incrementally
-              mode: 'fast',
-              confidenceThreshold: 60,
+          
+          let imgBitmap: ImageBitmap | null = null;
+          let scaleX = 1;
+          let scaleY = 1;
+
+          try {
+            const base64Data = (req.image_data_url || '').split(',')[1] || '';
+            if (base64Data && typeof atob !== 'undefined' && typeof createImageBitmap !== 'undefined') {
+              const binaryStr = atob(base64Data);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+              const mimeMatch = req.image_data_url.match(/^data:([^;,]+)/);
+              const blob = new Blob([bytes], { type: mimeMatch?.[1] || 'image/png' });
+              imgBitmap = await createImageBitmap(blob);
+              const dpr = req.capture?.dpr ?? 1;
+              const viewportW = req.capture?.viewport?.w ?? imgBitmap.width / dpr;
+              const viewportH = req.capture?.viewport?.h ?? imgBitmap.height / dpr;
+              scaleX = viewportW / imgBitmap.width;
+              scaleY = viewportH / imgBitmap.height;
             }
+          } catch {}
+
+          // Focused 2x high-resolution OCR for document/card image elements
+          const candidateImageElements = (req.dom?.elements || []).filter(
+            (el) =>
+              el.visible &&
+              el.in_viewport &&
+              (el.tag === 'img' || el.tag === 'canvas' || el.tag === 'embed' || el.has_bg_image || el.rendering === 'img' || el.rendering === 'canvas') &&
+              el.bbox[2] >= 80 && el.bbox[3] >= 50
           );
-          ocrMs = ocrResult.processingTimeMs;
 
-          // Add OCR tokens to result
-          ocr_tokens.push(...ocrResult.tokens);
+          if (imgBitmap && candidateImageElements.length > 0 && typeof OffscreenCanvas !== 'undefined') {
+            candidateImageElements.sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]));
+            for (const el of candidateImageElements.slice(0, 3)) {
+              try {
+                const [elX, elY, elW, elH] = el.bbox;
+                const targetW = elW * 2;
+                const targetH = elH * 2;
+                const cropCanvas = new OffscreenCanvas(targetW, targetH);
+                const cropCtx = cropCanvas.getContext('2d');
+                if (!cropCtx) continue;
 
-          // Create regions from high-confidence OCR tokens for PII detection
-          // Each word becomes a separate region to enable precise field-level detection
-          for (let i = 0; i < ocrResult.tokens.length; i++) {
-            const token = ocrResult.tokens[i]!;
-            
+                const srcX = Math.max(0, elX / scaleX);
+                const srcY = Math.max(0, elY / scaleY);
+                const srcW = Math.min(imgBitmap.width - srcX, elW / scaleX);
+                const srcH = Math.min(imgBitmap.height - srcY, elH / scaleY);
+                if (srcW <= 0 || srcH <= 0) continue;
+
+                cropCtx.drawImage(imgBitmap, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
+
+                const cropBlob = await cropCanvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+                const reader = new FileReader();
+                const cropDataUrl = await new Promise<string>((res) => {
+                  reader.onloadend = () => res(reader.result as string);
+                  reader.readAsDataURL(cropBlob);
+                });
+
+                const cropResult = await extractTextFromImage(
+                  cropDataUrl,
+                  { w: targetW, h: targetH },
+                  {
+                    languages: ['eng'],
+                    mode: 'fast',
+                    confidenceThreshold: 25,
+                  }
+                );
+
+                for (const token of cropResult.tokens) {
+                  // Map from 2x canvas back to page viewport coordinates
+                  const tokenX = Math.max(0, Math.round(elX + (token.bbox[0] / 2)));
+                  const tokenY = Math.max(0, Math.round(elY + (token.bbox[1] / 2)));
+                  const tokenW = Math.max(1, Math.min((viewport.w || 1280) - tokenX, Math.round(token.bbox[2] / 2)));
+                  const tokenH = Math.max(1, Math.min((viewport.h || 800) - tokenY, Math.round(token.bbox[3] / 2)));
+                  if (tokenX < (viewport.w || 1280) && tokenY < (viewport.h || 800) && tokenW > 0 && tokenH > 0) {
+                    ocr_tokens.push({
+                      ...token,
+                      bbox: [tokenX, tokenY, tokenW, tokenH],
+                    });
+                  }
+                }
+              } catch (cropErr) {
+                console.warn('[VisionEngine] Crop OCR failed on element:', cropErr);
+              }
+            }
+          }
+
+          if (imgBitmap) {
+            imgBitmap.close();
+          }
+
+          // Fallback to full screenshot OCR if no visual elements or no tokens extracted
+          if (ocr_tokens.length === 0) {
+            const ocrResult = await extractTextFromImage(
+              req.image_data_url,
+              viewport,
+              {
+                languages: ['eng'],
+                mode: 'fast',
+                confidenceThreshold: 25,
+              }
+            );
+            ocr_tokens.push(...ocrResult.tokens);
+          }
+
+          ocrMs = performance.now() - tOcr0;
+
+          // Add OCR regions for PII pipeline
+          for (let i = 0; i < ocr_tokens.length; i++) {
+            const token = ocr_tokens[i]!;
             regions.push({
               region_id: `ocr_word_${i}`,
               local_key: `ocr_${i}`,
@@ -259,13 +349,12 @@ export const visionEngine = {
               source: ['OCR'],
               semantic_type: 'text',
               text: token.text,
-              visual_text: token.text,
               bbox: token.bbox,
               confidence: token.confidence,
               visible: true,
               interactable: false,
               visual_state: ['visible'],
-              route: 'MEDIUM', // OCR regions warrant medium-confidence routing
+              route: 'MEDIUM',
               sensitivity: 'none',
               origin: req.dom.url_origin,
               frame_id: 'main',
@@ -274,9 +363,7 @@ export const visionEngine = {
             });
           }
 
-          console.log(
-            `[VisionEngine] OCR extracted ${ocrResult.tokens.length} words in ${ocrMs.toFixed(0)}ms`
-          );
+          console.log(`[VisionEngine] OCR extracted ${ocr_tokens.length} words in ${ocrMs.toFixed(0)}ms`);
         } catch (e) {
           console.warn('[VisionEngine] OCR extraction failed:', e);
         }

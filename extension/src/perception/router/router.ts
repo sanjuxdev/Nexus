@@ -59,7 +59,8 @@ export function route(
     } else if (level === 'MEDIUM') {
       needs = forceAtLeastMedium ? ['ocr', 'face', 'ground'] : ['ocr', 'ground'];
     } else {
-      needs = ['ui_detect', 'ocr', 'face', 'ground'];
+      // LOW confidence: Skip vision entirely unless it's a canvas/shadow element that REQUIRES it
+      needs = [];
     }
 
     let crop: BBox | null = padBBox(el.bbox, ROUTER_THRESHOLDS.CROP_PADDING_PX, snap.viewport);

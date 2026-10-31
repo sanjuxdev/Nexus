@@ -1,4 +1,4 @@
-import type { DomElementInfo } from '../../contracts/ts/dom.js';
+import type { DomElementInfo } from '@contracts/dom.js';
 import type {
   DetectorContext,
   DetectorValidationResult,
@@ -35,6 +35,7 @@ import {
   personNameDetector,
   dateOfBirthDetector,
 } from './detectors/personal.js';
+import { internationalPiiDetectors } from './detectors/international.js';
 
 /**
  * Phase 4: Indian PII Detector Registry
@@ -100,6 +101,9 @@ export class IndianPiiRegistry {
     // Personal (Priorities 50 - 45)
     this.register(personNameDetector);
     this.register(dateOfBirthDetector);
+
+    // International identity, contact, and financial identifiers.
+    internationalPiiDetectors.forEach((detector) => this.register(detector));
   }
 
   /**
@@ -210,35 +214,42 @@ export class IndianPiiRegistry {
   public detectText(text: string, context?: DetectorContext): PiiCandidate[] {
     if (!text || typeof text !== 'string') return [];
     if (this.isGenericNonPiiToken(text)) return [];
+    const scanContext: DetectorContext = {
+      ...context,
+      surroundingText: [context?.surroundingText, text].filter(Boolean).join(' '),
+      sourceType: context?.sourceType || 'TEXT',
+    };
 
     const candidates: PiiCandidate[] = [];
-    const seenCategories = new Set<string>();
-
     for (const detector of this.detectors) {
-      if (detector.canHandle(text, context)) {
-        const res = detector.detect(text, context);
-        if (res && res.isValid && res.confidence >= 0.70) {
-          if (!seenCategories.has(res.specificSubtype)) {
-            seenCategories.add(res.specificSubtype);
-            candidates.push({
-              id: `pii_${res.specificSubtype.toLowerCase()}_text`,
-              category: res.category,
-              specificSubtype: res.specificSubtype,
-              confidence: res.confidence,
-              sourceElement: {
-                dom_id: context?.element?.dom_id,
-                element_id: context?.element?.element_id,
-                role: context?.element?.role,
-                tag: context?.element?.tag,
-              },
-              reason: res.reason,
-              evidence: res.evidence,
-              bbox: context?.element?.bbox || null,
-              valueReference: res.valueReference,
-              isMandatory: res.isMandatory,
-            });
-          }
-        }
+      let remaining = text;
+      for (let occurrence = 0; occurrence < 100 && detector.canHandle(remaining, scanContext); occurrence++) {
+        const res = detector.detect(remaining, scanContext);
+        if (!res || !res.isValid || res.confidence < 0.70) break;
+        const evidence = res.evidence.find((item) =>
+          ['regex_structure', 'format_rule', 'checksum'].includes(item.field) && item.matchedValue &&
+          remaining.includes(item.matchedValue));
+        const at = evidence ? remaining.indexOf(evidence.matchedValue) : -1;
+        candidates.push({
+          id: `pii_${res.specificSubtype.toLowerCase()}_${at < 0 ? 'context' : at}_${occurrence}`,
+          category: res.category,
+          specificSubtype: res.specificSubtype,
+          confidence: res.confidence,
+          sourceElement: {
+            dom_id: scanContext.element?.dom_id,
+            element_id: scanContext.element?.element_id,
+            role: scanContext.element?.role,
+            tag: scanContext.element?.tag,
+          },
+          reason: res.reason,
+          evidence: res.evidence,
+          bbox: scanContext.element?.bbox || null,
+          valueReference: res.valueReference,
+          isMandatory: res.isMandatory,
+        });
+        if (!evidence) break;
+        remaining = `${remaining.slice(0, at)}${' '.repeat(evidence.matchedValue.length)}${remaining.slice(at + evidence.matchedValue.length)}`;
+        if (remaining === text) break;
       }
     }
 

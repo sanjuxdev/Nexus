@@ -35,6 +35,7 @@ declare module "wxt/browser" {
     | "/onnx/ort.webgpu.min.mjs"
     | "/onnx/ort.webgpu.mjs"
     | "/sidepanel.html"
+    | "/tesseract/worker.min.js"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
   export interface WxtRuntime {
     getURL(path: PublicPath): string;

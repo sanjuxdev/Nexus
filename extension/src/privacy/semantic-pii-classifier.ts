@@ -1,6 +1,6 @@
-import type { BBox } from '../../contracts/ts/common.js';
-import type { DomElementInfo } from '../../contracts/ts/dom.js';
-import type { PiiType } from '../../contracts/ts/privacy.js';
+import type { BBox } from '@contracts/common.js';
+import type { DomElementInfo } from '@contracts/dom.js';
+import type { PiiType } from '@contracts/privacy.js';
 
 /**
  * Phase 3: Semantic PII Classification Layer
@@ -25,7 +25,10 @@ export interface PiiSignalEvidence {
     | 'id'
     | 'element_name'
     | 'value'
-    | 'surrounding_text';
+    | 'surrounding_text'
+    | 'regex_structure'
+    | 'checksum'
+    | 'format_rule';
   matchedValue: string;
   matchedRule: string;
   signalStrength: 'high' | 'medium' | 'low';

@@ -12,3 +12,4 @@ export * from './geometry.js';
 export * from './schemas.js';
 export * from './bus.js';
 export * from './action-validator.js';
+export { ActionParamsSchema } from './action-validator.js';

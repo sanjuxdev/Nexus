@@ -1,4 +1,4 @@
-# NEXUS —  On-Device Visual Perception & Privacy Gateway for Autonomous Browser Agents
+# NEXUS — Zero-Trust On-Device Visual Perception & Privacy Gateway for Autonomous Browser Agents
 
 [![SIH 2026](https://img.shields.io/badge/SIH%202026-Problem%20Statement%2026171-orange?style=for-the-badge)](https://sih.gov.in)
 [![Organization](https://img.shields.io/badge/Sponsor-ISRO%20%7C%20Dept%20of%20Space-blue?style=for-the-badge)](https://www.isro.gov.in)

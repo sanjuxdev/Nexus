@@ -186,7 +186,7 @@ export const ifscDetector: PiiDetector = {
             evidence: [
               {
                 field: 'format_rule',
-                matchedValue: match.toUpperCase(),
+                matchedValue: match,
                 matchedRule: 'ifsc_4letter_zero_6alphanumeric',
                 signalStrength: 'high',
               },
@@ -260,7 +260,7 @@ export const upiDetector: PiiDetector = {
               evidence: [
                 {
                   field: 'regex_structure',
-                  matchedValue: match.toLowerCase(),
+                  matchedValue: match,
                   matchedRule: 'upi_vpa_structure',
                   signalStrength: 'high',
                 },

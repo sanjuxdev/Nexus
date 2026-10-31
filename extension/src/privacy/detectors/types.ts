@@ -1,6 +1,6 @@
-import type { BBox } from '../../../contracts/ts/common.js';
-import type { DomElementInfo } from '../../../contracts/ts/dom.js';
-import type { PiiType } from '../../../contracts/ts/privacy.js';
+import type { BBox } from '@contracts/common.js';
+import type { DomElementInfo } from '@contracts/dom.js';
+import type { PiiType } from '@contracts/privacy.js';
 
 /**
  * Phase 4: Indian PII Detector Registry Types
@@ -51,7 +51,7 @@ export interface DetectorContext {
   element?: DomElementInfo | null;
   surroundingText?: string;
   formName?: string;
-  sourceType?: 'DOM' | 'TEXT' | 'REGION';
+  sourceType?: 'DOM' | 'TEXT' | 'REGION' | 'OCR';
 }
 
 export interface DetectorValidationResult {

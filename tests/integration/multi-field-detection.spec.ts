@@ -29,31 +29,31 @@ describe('Multi-Field Document Detection', () => {
     // Synthetic OCR output simulating a PAN card
     const syntheticPanCardOcr: OcrToken[] = [
       // Line 1: Header
-      { text: 'INCOME', bbox: [100, 50, 80, 20], confidence: 0.95, line_number: 0, word_index: 0 },
-      { text: 'TAX', bbox: [185, 50, 50, 20], confidence: 0.95, line_number: 0, word_index: 1 },
-      { text: 'DEPARTMENT', bbox: [240, 50, 120, 20], confidence: 0.95, line_number: 0, word_index: 2 },
+      { text: 'INCOME', bbox: [100, 50, 80, 20], confidence: 0.95, line_id: 0 },
+      { text: 'TAX', bbox: [185, 50, 50, 20], confidence: 0.95, line_id: 0 },
+      { text: 'DEPARTMENT', bbox: [240, 50, 120, 20], confidence: 0.95, line_id: 0 },
       
       // Line 2: PAN Label + Number (on same line for realistic detection)
       // Valid PAN format: First 3 letters, 4th is entity type (P=Person), 5th initial, next 4 digits, last check letter
-      { text: 'PAN:', bbox: [100, 100, 50, 18], confidence: 0.94, line_number: 1, word_index: 0 },
-      { text: 'ABCPJ1234K', bbox: [155, 100, 150, 22], confidence: 0.98, line_number: 1, word_index: 1 },
+      { text: 'PAN:', bbox: [100, 100, 50, 18], confidence: 0.94, line_id: 1 },
+      { text: 'ABCPJ1234K', bbox: [155, 100, 150, 22], confidence: 0.98, line_id: 1 },
       
       // Line 3: Name Label + Value
-      { text: 'Name:', bbox: [100, 170, 60, 18], confidence: 0.94, line_number: 3, word_index: 0 },
-      { text: 'John', bbox: [165, 170, 50, 18], confidence: 0.96, line_number: 3, word_index: 1 },
-      { text: 'Doe', bbox: [220, 170, 40, 18], confidence: 0.96, line_number: 3, word_index: 2 },
+      { text: 'Name:', bbox: [100, 170, 60, 18], confidence: 0.94, line_id: 3 },
+      { text: 'John', bbox: [165, 170, 50, 18], confidence: 0.96, line_id: 3 },
+      { text: 'Doe', bbox: [220, 170, 40, 18], confidence: 0.96, line_id: 3 },
       
       // Line 4: Father's Name
-      { text: "Father's", bbox: [100, 200, 70, 18], confidence: 0.93, line_number: 4, word_index: 0 },
-      { text: 'Name:', bbox: [175, 200, 55, 18], confidence: 0.93, line_number: 4, word_index: 1 },
-      { text: 'Robert', bbox: [235, 200, 60, 18], confidence: 0.95, line_number: 4, word_index: 2 },
-      { text: 'Doe', bbox: [300, 200, 40, 18], confidence: 0.95, line_number: 4, word_index: 3 },
+      { text: "Father's", bbox: [100, 200, 70, 18], confidence: 0.93, line_id: 4 },
+      { text: 'Name:', bbox: [175, 200, 55, 18], confidence: 0.93, line_id: 4 },
+      { text: 'Robert', bbox: [235, 200, 60, 18], confidence: 0.95, line_id: 4 },
+      { text: 'Doe', bbox: [300, 200, 40, 18], confidence: 0.95, line_id: 4 },
       
       // Line 5: Date of Birth
-      { text: 'Date', bbox: [100, 230, 50, 18], confidence: 0.92, line_number: 5, word_index: 0 },
-      { text: 'of', bbox: [155, 230, 25, 18], confidence: 0.92, line_number: 5, word_index: 1 },
-      { text: 'Birth:', bbox: [185, 230, 50, 18], confidence: 0.92, line_number: 5, word_index: 2 },
-      { text: '15/08/1990', bbox: [240, 230, 110, 18], confidence: 0.97, line_number: 5, word_index: 3 },
+      { text: 'Date', bbox: [100, 230, 50, 18], confidence: 0.92, line_id: 5 },
+      { text: 'of', bbox: [155, 230, 25, 18], confidence: 0.92, line_id: 5 },
+      { text: 'Birth:', bbox: [185, 230, 50, 18], confidence: 0.92, line_id: 5 },
+      { text: '15/08/1990', bbox: [240, 230, 110, 18], confidence: 0.97, line_id: 5 },
     ];
 
     // Synthetic perception frame representing a PAN card image element
@@ -89,7 +89,7 @@ describe('Multi-Field Document Detection', () => {
         {
           bbox: [350, 100, 80, 100], // Face photo location
           confidence: 0.92,
-          landmarks: [],
+          coordinateSpace: 'frame',
         },
       ],
       dom: {
@@ -115,6 +115,7 @@ describe('Multi-Field Document Detection', () => {
       },
       capture: {
         capture_id: 'cap_test_001',
+        page_state_hash: 'hash_test',
         image: { w: 1280, h: 800 },
         viewport: { w: 1280, h: 800 },
         dpr: 1,
@@ -243,12 +244,12 @@ describe('Multi-Field Document Detection', () => {
       ],
       ocr_tokens: [
         // OCR from thumbnail 1 - Phone number (within bbox [100, 100, 200, 150])
-        { text: '+91', bbox: [120, 120, 30, 18], confidence: 0.92, line_number: 0, word_index: 0 },
-        { text: '8765432109', bbox: [155, 120, 90, 18], confidence: 0.96, line_number: 0, word_index: 1 },
+        { text: '+91', bbox: [120, 120, 30, 18], confidence: 0.92, line_id: 0 },
+        { text: '8765432109', bbox: [155, 120, 90, 18], confidence: 0.96, line_id: 0 },
         
         // OCR from thumbnail 2 - Phone number (within bbox [320, 100, 200, 150])
-        { text: '+91', bbox: [340, 120, 30, 18], confidence: 0.92, line_number: 1, word_index: 0 },
-        { text: '9876543210', bbox: [375, 120, 90, 18], confidence: 0.96, line_number: 1, word_index: 1 },
+        { text: '+91', bbox: [340, 120, 30, 18], confidence: 0.92, line_id: 1 },
+        { text: '9876543210', bbox: [375, 120, 90, 18], confidence: 0.96, line_id: 1 },
       ],
       faces: [],
       dom: {
@@ -274,6 +275,7 @@ describe('Multi-Field Document Detection', () => {
       },
       capture: {
         capture_id: 'cap_test_002',
+        page_state_hash: 'hash_test_2',
         image: { w: 1280, h: 800 },
         viewport: { w: 1280, h: 800 },
         dpr: 1,

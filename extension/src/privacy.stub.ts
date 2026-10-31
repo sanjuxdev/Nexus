@@ -75,7 +75,7 @@ export function validateAadhaarVerhoeff(aadhaarStr: string): boolean {
  * Validates 10-character Indian PAN format with 4th character entity check.
  */
 export function validateIndianPAN(panStr: string): boolean {
-  const clean = panStr.trim().toUpperCase();
+  const clean = panStr.replace(/[\s\-]/g, '').trim().toUpperCase();
   // 4th character must be P (Individual), C (Company), H (HUF), F (Firm), A (AOP),
   // T (Trust), B (BOI), L (Local Authority), J (Artificial Juridical Person), or G (Govt)
   return /^[A-Z]{3}[PCHFATBLJG][A-Z]\d{4}[A-Z]$/.test(clean);
@@ -387,16 +387,56 @@ export const privacyStub = {
           }
         }
       }
+
+      // Fallback: If no document fields were found via image elements, analyze all OCR tokens directly
+      const ocrBoxesCount = boxesToMask.filter(b => b.source === 'OCR').length;
+      if (ocrBoxesCount === 0 && req.frame.ocr_tokens.length > 0) {
+        const viewportBBox: [number, number, number, number] = [
+          0,
+          0,
+          req.frame.dom?.viewport?.w || 1280,
+          req.frame.dom?.viewport?.h || 800,
+        ];
+        const docAnalysis = analyzeDocumentFields(req.frame.ocr_tokens, viewportBBox);
+        if (docAnalysis.fields.length > 0) {
+          console.log(`[DocumentDetection] Found ${docAnalysis.fields.length} fields from global OCR tokens`);
+          const fieldCandidates = documentFieldsToPiiCandidates(docAnalysis, 'doc_global');
+          for (const candidate of fieldCandidates) {
+            detections.push({
+              id: candidate.id,
+              type: candidate.category,
+              source: ['OCR', 'VISION'],
+              region_id: 'doc_global',
+              bbox: candidate.bbox,
+              span: null,
+              confidence: candidate.confidence,
+              mandatory: candidate.isMandatory,
+            });
+
+            boxesToMask.push({
+              x: candidate.bbox![0],
+              y: candidate.bbox![1],
+              w: candidate.bbox![2],
+              h: candidate.bbox![3],
+              label: candidate.specificSubtype,
+              source: 'OCR',
+            });
+
+            totalMaskedAreaPx += candidate.bbox![2] * candidate.bbox![3];
+            textReplacements++;
+          }
+        }
+      }
     }
 
     const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
     const aadhaarRegex = /\b[2-9]\d{3}[\s-]?\d{4}[\s-]?\d{4}\b/g;
-    const panRegex = /\b[A-Za-z]{5}\d{4}[A-Za-z]\b/g;
+    const panRegex = /\b[A-Za-z]{5}[\s\-]?\d{4}[\s\-]?[A-Za-z]\b/g;
     // Strict Indian E.164 phone pattern: supports +91, 0, spaces, dashes, exactly 10 core digits, not embedded in longer numbers
     const phoneRegex = /(?<!\d)(?:(?:\+91|0)[\s-]?)?[6-9](?:[\s-]?\d){9}(?!\d)/g;
 
     const sanitizedRegions: SanitizedRegion[] = req.frame.regions.map((reg) => {
-      let sanitizedText = reg.text || reg.visual_text || reg.clean_text || '';
+      let sanitizedText = reg.text || (reg as any).visual_text || (reg as any).clean_text || '';
       let regionHasPii = false;
       let boxLabel = 'PII';
 
@@ -410,7 +450,7 @@ export const privacyStub = {
       const elInputName = (domEl?.input?.name || '').toLowerCase();
       const elPlaceholder = (domEl?.input?.placeholder || '').toLowerCase();
       const elId = ((domEl as any)?.id || '').toLowerCase();
-      const regText = (reg.text || reg.visual_text || reg.clean_text || '').toLowerCase();
+      const regText = (reg.text || (reg as any).visual_text || (reg as any).clean_text || '').toLowerCase();
 
       const isInputSemantics = reg.semantic_type === 'input' || domEl?.tag === 'input' || domEl?.tag === 'textarea' || domEl?.role === 'textbox' || domEl?.tag === 'select' || domEl?.tag === 'label' || domEl?.role === 'radio' || domEl?.role === 'checkbox';
 
@@ -519,7 +559,7 @@ export const privacyStub = {
       const isSurgicallyMaskable = reg.bbox[2] < 800 && reg.bbox[3] < 600;
 
       // Direct semantic classification for form inputs
-      const semanticCandidate = domEl ? classifyDomElement(domEl, { surroundingText: reg.text }) : null;
+      const semanticCandidate = domEl ? classifyDomElement(domEl, { surroundingText: reg.text ?? undefined }) : null;
 
       if (semanticCandidate && semanticCandidate.confidence >= 0.70) {
         regionHasPii = true;
@@ -630,7 +670,7 @@ export const privacyStub = {
         // Pattern detection for unclassified text regions (OCR, paragraphs, text nodes, tables)
         const isOCR = (reg as any).sources?.includes('OCR') || reg.source?.includes('OCR');
         const textCandidates = indianPiiRegistry.detectText(sanitizedText, {
-          surroundingText: reg.clean_text || reg.text,
+          surroundingText: (reg as any).clean_text || reg.text || undefined,
           sourceType: isOCR ? 'OCR' : 'DOM',
         });
 
@@ -757,17 +797,30 @@ export const privacyStub = {
         }
       }
 
+      const isVisualMedia =
+        reg.semantic_type === 'image' ||
+        domEl?.tag === 'img' ||
+        domEl?.tag === 'canvas' ||
+        domEl?.tag === 'embed' ||
+        domEl?.has_bg_image;
+
       if (regionHasPii && reg.bbox && isSurgicallyMaskable) {
-        const isOCR = (reg as any).sources?.includes('OCR') || reg.source?.includes('OCR');
-        boxesToMask.push({
-          x: reg.bbox[0],
-          y: reg.bbox[1],
-          w: reg.bbox[2],
-          h: reg.bbox[3],
-          label: boxLabel,
-          source: isOCR ? 'OCR' : 'DOM',
-        });
-        totalMaskedAreaPx += reg.bbox[2] * reg.bbox[3];
+        // Visual media (images, canvases) should NEVER have their whole outer bounding box
+        // masked for text-based PII (PAN, Aadhaar, Email, Phone).
+        // Text PII on images is surgically redacted via OCR token/field boxes.
+        // Only FACE / avatar profiles should directly mask visual media elements.
+        if ((!isVisualMedia && (reg.bbox[2] * reg.bbox[3] <= 15000 || domEl?.input)) || boxLabel === 'FACE') {
+          const isOCR = (reg as any).sources?.includes('OCR') || reg.source?.includes('OCR');
+          boxesToMask.push({
+            x: reg.bbox[0],
+            y: reg.bbox[1],
+            w: reg.bbox[2],
+            h: reg.bbox[3],
+            label: boxLabel,
+            source: isOCR ? 'OCR' : 'DOM',
+          });
+          totalMaskedAreaPx += reg.bbox[2] * reg.bbox[3];
+        }
       }
 
       return {
@@ -919,7 +972,11 @@ export const privacyStub = {
         console.log(`[PRIVACY_DEBUG] ✓ Sanitized preview generated, length: ${maskedDataUrl?.length || 0}`);
       } catch (err) {
         console.error('[PRIVACY_DEBUG] ✗ Failed to generate sanitized preview:', err);
+        maskedDataUrl = req.image_data_url;
       }
+    } else if (req.image_data_url) {
+      console.log(`[PRIVACY_DEBUG] ✓ 0 masked boxes, using clean screenshot for sanitized preview`);
+      maskedDataUrl = req.image_data_url;
     } else {
       console.warn(`[PRIVACY_DEBUG] ✗ Cannot generate sanitized preview: boxesToMask=${boxesToMask.length}, hasImage=${!!req.image_data_url}`);
     }

@@ -1,5 +1,5 @@
-import type { BBox } from '../../contracts/ts/common.js';
-import type { PiiDetection } from '../../contracts/ts/privacy.js';
+import type { BBox } from '@contracts/common.js';
+import type { PiiDetection } from '@contracts/privacy.js';
 
 /**
  * PII Detection Deduplication & Overlap Resolution

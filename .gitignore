@@ -3,6 +3,7 @@
 !README.md
 *.pdf
 *.zip
+*.traineddata
 zip_folder/
 sih/
 sih.zip
